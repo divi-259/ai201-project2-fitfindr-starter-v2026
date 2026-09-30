@@ -41,7 +41,7 @@
 
 <!-- Three or four sentences: what a user asks for, and what they get back. -->
 
-
+FitFindr is a thrift-shopping assistant. A user describes the piece they want in plain language, optionally with a size and a price ceiling (for example, "vintage graphic tee under $30, size M"). The agent searches the secondhand listings for the best match, then suggests one or two outfits that pair it with clothes already in the user's wardrobe (or gives general styling advice if the wardrobe is empty), and writes a short, shareable "fit card" caption that names the item, its price, and its platform. If no listing matches, the agent stops before styling anything and tells the user what to change, such as raising the price limit, trying a different size, or broadening the description.
 
 ---
 
