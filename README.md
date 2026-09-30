@@ -59,24 +59,31 @@ FitFindr is a thrift-shopping assistant. A user describes the piece they want in
 
 ### `search_listings`
 
-- **What it does:**
+- **What it does:** Filters the 40 mock listings by price and size, then ranks what's left by keyword overlap with the description. A keyword in the title, style tags or category scores 2; one found only in the description, colors or brand scores 1. Filler words ("looking", "for", "under") are ignored and a trailing plural "s" is dropped. Size matches on whole tokens: every token of the requested size must appear in the listing's size, so `M` matches `M`, `S/M` and `M/L`, but `S` does not match `US 9` and `L` does not match `XL`. `One Size` listings match any size.
 - **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
-- **Returns:**
-- **When it has nothing:**
+  - `description` (str): keywords for what the user wants, e.g. `"vintage graphic tee"`
+  - `size` (str | None): size to filter by, case-insensitive; `None` skips size filtering
+  - `max_price` (float | None): price ceiling, inclusive; `None` skips price filtering
+- **Returns:** `list[dict]`: up to `SEARCH_RESULT_LIMIT` (10) listing dicts, highest score first (ties keep dataset order). Each dict has `id`, `title`, `description`, `category`, `style_tags` (list), `size`, `condition`, `price` (float), `colors` (list), `brand` (str or None) and `platform`.
+- **When it has nothing:** Returns an empty list `[]`, not `None` and not an exception, when no listing passes the filters with a score above zero. The loop branches on this: it sets `session["error"]` and stops before `suggest_outfit`.
 
 ### `suggest_outfit`
 
-- **What it does:**
+- **What it does:** Asks the model, through `generate()`, for one or two outfits built around the thrifted item. If the wardrobe has items, the prompt lists them and asks for combinations that name pieces the user already owns. If it's empty, the prompt asks for general styling ideas for the item instead.
 - **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+  - `new_item` (dict): one listing dict from `search_listings`, the item being considered (uses `title`, `category`, `style_tags`, `colors`, `description`; `brand` may be `None`)
+  - `wardrobe` (dict): a wardrobe dict with an `items` key holding a list of wardrobe item dicts; the list may be empty
+- **Returns:** `str`: a non-empty block of outfit suggestions. Each suggestion names the pieces it combines, drawn from the user's wardrobe when there is one.
+- **When it has nothing:** With an empty wardrobe (`wardrobe["items"] == []`) it returns general styling advice for the item, not `""` and not an exception. If the model can't be reached, `generate()` raises `ModelUnavailable`, which the loop handles.
 
 ### `create_fit_card`
 
-- **What it does:**
+- **What it does:** Asks the model, through `generate()`, for a short caption someone would actually post about the find. It should read like a real post, not a product description: specific about the vibe, and mentioning the item, its price and its platform once each.
 - **Inputs:**
-- **Returns:**
-- **When it has nothing:**
+  - `outfit` (str): the outfit suggestion string returned by `suggest_outfit`
+  - `new_item` (dict): the same listing dict passed to `suggest_outfit` (uses `title`, `price`, `platform`)
+- **Returns:** `str`: a caption of two to four sentences. Different inputs produce different captions
+- **When it has nothing:** If `outfit` is empty or only whitespace, it skips the model call and returns a descriptive message saying there was no outfit to caption, rather than raising. If the model can't be reached, `generate()` raises `ModelUnavailable`, which the loop handles.
 
 ---
 
@@ -93,13 +100,22 @@ FitFindr is a thrift-shopping assistant. A user describes the piece they want in
      The grader checks your code against what you claim here, so the file and
      function have to be real. -->
 
-**Branch rule:**
+**Branch rule:** If `search_listings` returns an empty list, put a message in `session["error"]` that tells the user what to change (raise the price limit, drop or change the size, or use broader keywords), and return the session without calling `suggest_outfit` or `create_fit_card`. Otherwise, take the first (highest-scoring) result as `session["selected_item"]` and go on to `suggest_outfit`, then `create_fit_card`. Every pass round the loop first calls `trace.check_iterations(count)`, which raises once the count passes `MAX_ITERATIONS` (10).
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** <!-- regex, string splitting, or asking the model — say which -->
+**How the query is parsed:** Regex, no model call. `max_price` comes from a dollar amount after "under", "below", "less than" or "max" (e.g. `under $30` → `30.0`). `size` comes from the token after the word "size" (e.g. `size M` → `"M"`, `size US 8.5` → `"US 8.5"`). Whatever remains, with those phrases removed, is the `description`. If no price or size is found, that field is `None` and `search_listings` skips that filter.
 
-**What moves through the session:** <!-- which fields, in what order -->
+**What moves through the session:** in order:
+1. `query`: the user's text, set by `new_session`
+2. `parsed`: `{"description", "size", "max_price"}` from the regex
+3. `search_results`: the list `search_listings` returned (may be `[]`)
+4. `error`: set here and the run stops, **only** if `search_results` is empty
+5. `selected_item`: `search_results[0]`
+6. `outfit_suggestion`: the string `suggest_outfit(selected_item, wardrobe)` returned
+7. `fit_card`: the string `create_fit_card(outfit_suggestion, selected_item)` returned
+
+`wardrobe` is set at the start and read by `suggest_outfit`. When the run stops early, `selected_item`, `outfit_suggestion` and `fit_card` stay `None`.
 
 ---
 
