@@ -29,6 +29,13 @@ tool calls and returns a fit card — in at least 4 of 5 tries.
      "my search is a plain keyword match and some phrasings will miss" is a
      real answer. -->
 
+My search is a plain keyword match, so a query phrased differently from the
+listings can come back empty even when a good match exists. For example, no
+listing contains the word "t-shirt" — they say "tee" — so a "t-shirt" query may
+find nothing, and the loop stops before the fit card. Two of the three tools
+also call the model, which can fail or return nothing. 4 of 5 leaves room for
+one miss like that without excusing a loop that's actually broken.
+
 ---
 
 ## 2. An impossible query stops before the second tool
@@ -39,6 +46,11 @@ Given a query that matches no listings, the agent stops before calling
 **Why this target:**
 <!-- Why is 5 of 5 reasonable here when criterion 1 isn't? What's different
      about this path? -->
+
+This path never reaches the model. `search_listings` is plain code over a fixed
+data file, so an impossible query returns an empty list every time, and the
+check on that empty list is a plain `if` in `run_agent`. Nothing on this path
+varies from run to run, so there's no reason to accept any misses.
 
 ---
 
