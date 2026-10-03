@@ -50,7 +50,7 @@ Given a query that matches no listings, the agent stops before calling
 This path never reaches the model. `search_listings` is plain code over a fixed
 data file, so an impossible query returns an empty list every time, and the
 check on that empty list is a plain `if` in `run_agent`. Nothing on this path
-varies from run to run, so there's no reason to accept any misses.
+varies from run to run, so there's no reason to accept any misses. 
 
 ---
 
@@ -66,14 +66,20 @@ varies from run to run, so there's no reason to accept any misses.
      compares session["selected_item"] against what actually reached
      suggest_outfit is the shape you're after. -->
 
+## 3. The item search found is the item every later tool receives
+
+For a matching query, the `id` of `session["selected_item"]` is the same as the
+`id` of `session["search_results"][0]`, the `new_item` passed to
+`suggest_outfit`, and the `new_item` passed to `create_fit_card` — 5 of 5 tries.
 
 
 **Why this target:**
 
+Handing the item from one tool to the next is plain Python,  nothing on that
+path calls the model, so there's no run-to-run variation to allow for.
 
 
 ---
-
 ## 4. Something about the fit card
 
 <!-- YOU WRITE THIS ONE.
@@ -87,11 +93,20 @@ varies from run to run, so there's no reason to accept any misses.
      sentence? A card longer than a caption anyone would post? Any of those can
      be turned into a number. -->
 
+## 4. The fit card names the item, its price and its platform
+
+For five different matching items, run with caching off, the fit card mentions
+the item, its exact price, and its platform, and is two to four sentences long
+— in at least 4 of 5 tries.
 
 
 **Why this target:**
 
-
+The prompt asks for all three facts and gives the model their exact values, so
+most cards should include them. But the model writes freely at `TEMPERATURE`
+0.9, and the system prompt asks for a casual post, not a listing — so it can
+round a price ("under 40 bucks") or drop the platform in favour of vibe. 4 of 5
+allows one card like that. 
 
 ---
 
@@ -104,11 +119,11 @@ varies from run to run, so there's no reason to accept any misses.
      search respects a price ceiling — anything, as long as it names a number
      or an observable outcome. -->
 
-
+The size filter returns no false matches. For five sized queries (size S, M, L, XL, US 8), every listing returned has the requested size as a whole token. So no US 9 for "S" and no XL for "L", 5 of 5 tries. 
 
 **Why this target:**
 
-
+The filter is plain code in python, and it should give a deterministic result.
 
 ---
 
