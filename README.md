@@ -13,8 +13,8 @@
 > python app.py ask 'vintage graphic tee under $30'
 > ```
 >
-> All three tools are stubs, so that last command will do nothing useful yet.
-> That's the starting position.
+> All three tools and the planning loop are built, so that last command runs
+> the whole agent: search, outfit, fit card.
 >
 > **The rest of this file is your submission.** Fill it in as you go.
 
@@ -104,7 +104,11 @@ FitFindr is a thrift-shopping assistant. A user describes the piece they want in
 
 **Where it lives:** `agent.py::run_agent`
 
-**How the query is parsed:** Regex, no model call. `max_price` comes from a dollar amount after "under", "below", "less than" or "max" (e.g. `under $30` → `30.0`). `size` comes from the token after the word "size" (e.g. `size M` → `"M"`, `size US 8.5` → `"US 8.5"`). Whatever remains, with those phrases removed, is the `description`. If no price or size is found, that field is `None` and `search_listings` skips that filter.
+**How the query is parsed:** Regex, no model call. `max_price` comes from a dollar amount after "under", "below", "less than" or "max" (e.g. `under $30` → `30.0`). `size` comes from the token after the word "size" (e.g. `size M` → `"M"`, `size US 8.5` → `"US 8.5"`). Size formats handled: `M`, `S/M`, `XXS`, `W30`, `US 8.5`. Whatever remains, with those phrases, commas and `$` signs removed, is the `description`. If no price or size is found, that field is `None` and `search_listings` skips that filter. The parsing is `_parse_query` in `agent.py`.
+
+**The error message on an empty search:** built by `_no_results_message` in `agent.py`. It repeats what was searched for and suggests changing only the filters the user actually set, plus broader keywords. For `designer ballgown size XXS under $5`:
+
+> No listings matched 'designer ballgown' in size XXS under $5. To find something, raise the price limit above $5, or try a different size than XXS, or use broader keywords (e.g. 'jacket' instead of a specific style).
 
 **What moves through the session:** in order:
 1. `query`: the user's text, set by `new_session`
@@ -129,25 +133,50 @@ FitFindr is a thrift-shopping assistant. A user describes the piece they want in
 **One full query**
 
 ```
-$ python app.py ask '...'
+$ python app.py ask 'vintage graphic tee under $30'
 
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   **Outfit 1: Casual Y2K Denim Look**
+Pair the Y2K Baby Tee — Butterfly Print with your baggy straight-leg jeans, dark wash for a classic early 2000s silhouette. Finish the look by stepping into your chunky white sneakers and slinging the black crossbody bag over your shoulder. 
+
+**Outfit 2: Layered Streetwear Style**
+Tuck the Y2K Baby Tee — Butterfly Print into your wide-leg khaki trousers, secured with the brown leather belt. Layer your vintage black denim jacket on top and lace up your black combat boots to add an edgy contrast to the cute butterfly graphic.
+
+  Fit card: scored this little butterfly baby tee on depop for just 18 bucks and I'm obsessed. figured it was too cute not to style a couple ways, so I'm currently torn between throwing it on with baggy denim and chunky sneaks or edging it up with wide-leg trousers and a black denim jacket.
+
+2 model calls this session, 577 prompt + 197 output tokens
+```
+
+**The same command on a query nothing matches**, which stops before any model call:
+
+```
+$ python app.py ask 'designer ballgown size XXS under $5'
+
+  No listings matched 'designer ballgown' in size XXS under $5. To find something, raise the price limit above $5, or try a different size than XXS, or use broader keywords (e.g. 'jacket' instead of a specific style).
+
+0 model calls this session
 ```
 
 **The three tools, tested one at a time**
 
 ```
 $ python -c "from tools import search_listings; print(search_listings('graphic tee', max_price=30))"
-
+[{'id': 'lst_002', 'title': 'Y2K Baby Tee — Butterfly Print', 'description': 'Super cute early 2000s baby tee with butterfly graphic. Fitted crop length. Tag says medium but fits like a small.', 'category': 'tops', 'style_tags': ['y2k', 'vintage', 'graphic tee', 'cottagecore'], 'size': 'S/M', 'condition': 'excellent', 'price': 18.0, 'colors': ['white', 'pink', 'purple'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_006', 'title': 'Graphic Tee — 2003 Tour Bootleg Style', 'description': 'Vintage-style bootleg tee with faded graphic. Slightly boxy fit. 100% cotton, soft and worn-in.', 'category': 'tops', 'style_tags': ['graphic tee', 'vintage', 'grunge', 'streetwear', 'band tee'], 'size': 'L', 'condition': 'good', 'price': 24.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_033', 'title': 'Vintage Band Tee — Faded Grey', 'description': 'Faded grey band-style tee with distressed graphic. Crew neck. Fits boxy. Well-loved but no holes or major damage.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'band tee', 'graphic tee', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 19.0, 'colors': ['grey', 'charcoal'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_015', 'title': 'Vintage Graphic Hoodie — Faded Black', 'description': 'Faded black pullover hoodie with barely-visible vintage graphic on the chest. Cozy interior. Some pilling but adds to the worn-in look.', 'category': 'tops', 'style_tags': ['vintage', 'grunge', 'graphic', 'streetwear'], 'size': 'L', 'condition': 'fair', 'price': 26.0, 'colors': ['black', 'charcoal'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_017', 'title': 'Mesh Long-Sleeve Top — Black', 'description': 'Sheer black mesh long-sleeve. Great for layering under a graphic tee or over a bralette. Stretchy material, fits true to size.', 'category': 'tops', 'style_tags': ['y2k', 'grunge', 'goth', 'layering'], 'size': 'S/M', 'condition': 'excellent', 'price': 15.0, 'colors': ['black'], 'brand': None, 'platform': 'depop'}, {'id': 'lst_011', 'title': 'Low-Rise Cargo Pants — Khaki', 'description': 'Y2K era low-rise cargo pants. Lots of pockets. Khaki color, slightly distressed at the hems. Great for layering with a long tee.', 'category': 'bottoms', 'style_tags': ['y2k', 'cargo', '2000s', 'streetwear'], 'size': 'W29', 'condition': 'fair', 'price': 27.0, 'colors': ['khaki', 'tan'], 'brand': None, 'platform': 'poshmark'}, {'id': 'lst_012', 'title': 'Oversized Crewneck Sweatshirt — Vintage Navy', 'description': 'Perfectly faded navy crewneck. Genuinely vintage — not manufactured distressed. Ribbed cuffs and hem. No graphics, clean.', 'category': 'tops', 'style_tags': ['vintage', 'basics', 'oversized', 'classic'], 'size': 'XL (fits oversized)', 'condition': 'good', 'price': 20.0, 'colors': ['navy'], 'brand': None, 'platform': 'thredUp'}]
 ```
 
 ```
-$ python -c "from tools import suggest_outfit; ..."
+$ python -c "from tools import suggest_outfit; from utils.data_loader import get_example_wardrobe, load_listings; print(suggest_outfit(load_listings()[0], get_example_wardrobe()))"
+**Outfit 1: Effortless Streetwear**
+Pair the Vintage Levi's 501 Jeans with the white ribbed tank top tucked in, cinched with the brown leather belt. Throw the oversized grey crewneck sweatshirt over your shoulders and finish the look with the chunky white sneakers and the black crossbody bag. 
 
+**Outfit 2: Edgy Casual**
+Style the Vintage Levi's 501 Jeans with the black cropped zip hoodie layered underneath the vintage black denim jacket for a cool double-denim moment. Ground the outfit with the black combat boots and carry your essentials in the black crossbody bag.
 ```
 
 ```
-$ python -c "from tools import create_fit_card; ..."
-
+$ python -c "from tools import create_fit_card; from utils.data_loader import load_listings; print(create_fit_card('jeans and white sneakers', load_listings()[0]))"
+Scored these vintage Levi's 501s on depop for $38 and I am never taking them off. Paired them with crisp white sneakers for that effortlessly cool 90s dad vibe. Honestly the wash on these is just too good.
 ```
 
 ---
@@ -161,17 +190,19 @@ $ python -c "from tools import create_fit_card; ..."
      "I gave Claude my search_listings spec. It returned None on no match
      instead of an empty list, so I changed it" is the level we want. -->
 
-**Moment 1**
+**Moment 1: writing the three tools**
 
-- *What I asked for:*
+- *What I asked for:* I asked Claude to write all three tool functions in tools.py after helping me understand what each tool does.
+- *What came back:* It came up with fully formed methods taking care of edge cases.
+- *What I changed:* I made sure the code was functional, and tested each function.
+
+**Moment 2: formatting the write-up, and understanding how the code works**
+
+- *What I asked for:* I asked Claude to format README sections (Tool Inventory, Planning Loop, Sample Run) and to refine the criteria and their whys in `criteria.md`. I also asked how to run each tool and check its results, so I could understand what the code was actually doing.
 - *What came back:*
+It formatted and the files, and helped me brainstorm the criteria.md 
 - *What I changed:*
-
-**Moment 2**
-
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+I updated my criterias after the suggestions from the claude to make it more robust.
 
 <!-- ═══════════════════════ UNIT 4 — THE TEST ═══════════════════════
 
