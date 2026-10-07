@@ -17,7 +17,8 @@ import re
 
 import config
 import trace
-from tools import search_listings, suggest_outfit, create_fit_card
+from tools import suggest_outfit, create_fit_card
+from mcp_client import call_tool
 from generate import ModelUnavailable
 
 
@@ -87,12 +88,12 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         session["parsed"] = _parse_query(query)
         parsed = session["parsed"]
 
-        # 4. Search.
-        session["search_results"] = search_listings(
-            parsed["description"],
-            size=parsed["size"],
-            max_price=parsed["max_price"],
-        )
+        # 4. Search — over MCP, via the search_listings tool in mcp_server.py.
+        session["search_results"] = call_tool("search_listings", {
+            "description": parsed["description"],
+            "size": parsed["size"],
+            "max_price": parsed["max_price"],
+        })
 
         # ⚠️ THE BRANCH: nothing came back → say what to change, and stop
         # before suggest_outfit ever sees an empty result.
