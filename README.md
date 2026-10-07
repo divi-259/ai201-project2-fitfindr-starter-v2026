@@ -286,19 +286,59 @@ that produced it:
 **Happy path**
 
 ```
+python app.py ask 'vintage graphic tee under $30'         
 
+
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: {'description': 'vintage graphic tee', 'size': None, 'max_price': 30.0}
+[2] search_listings (via MCP)
+      in:  {'description': 'vintage graphic tee', 'size': None, 'max_price': 30.0}
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      →    results found → top match, continuing to suggest_outfit
+[4] suggest_outfit
+      in:  item='Y2K Baby Tee — Butterfly Print', wardrobe_items=10
+      out: **Outfit 1: Casual Y2K Denim Look** Pair the Y2K Baby Tee — Butterfly Print with your Baggy straight-leg jeans…
+[5] create_fit_card
+      in:  item='Y2K Baby Tee — Butterfly Print', outfit=<from suggest_outfit>
+      out: scored this little butterfly print baby tee on depop for $18 and I’m literally never taking it off. worn it tw…
+
+  Found:    Y2K Baby Tee — Butterfly Print — $18.0 on depop
+
+  Outfit:   **Outfit 1: Casual Y2K Denim Look**
+Pair the Y2K Baby Tee — Butterfly Print with your Baggy straight-leg jeans, dark wash. Complete the outfit by slipping on the Chunky white sneakers and wearing the Black crossbody bag. 
+
+**Outfit 2: Layered Streetwear Style**
+Style the Y2K Baby Tee — Butterfly Print underneath the Vintage black denim jacket, paired with your Baggy straight-leg jeans, dark wash. Finish the look with the Black combat boots for an effortless edge.
+
+  Fit card: scored this little butterfly print baby tee on depop for $18 and I’m literally never taking it off. worn it twice already—first with baggy dark wash denim and chunky sneakers for pure y2k nostalgia, and then layered under an oversized black jacket with combat boots when I want it a little more grunge. honestly the easiest $18 I’ve ever spent.
 ```
 
 **Empty search**
 
 ```
+python app.py ask 'yellow car under $30'         
+
+
+[1] parse_query
+      in:  yellow car under $30
+      out: {'description': 'yellow car', 'size': None, 'max_price': 30.0}
+[2] search_listings (via MCP)
+      in:  {'description': 'yellow car', 'size': None, 'max_price': 30.0}
+      out: [] (empty)
+[3] branch
+      →    search empty → stopping before suggest_outfit
+
+  No listings matched 'yellow car' under $30. To find something, raise the price limit above $30, or use broader keywords (e.g. 'jacket' instead of a specific style).
+
+0 model calls this session
+
 
 ```
 
-**On the MCP move:** <!-- what changed in your code, and whether anything
-behaved differently afterwards. If the rewire didn't work, say exactly where it
-broke — the error text and the last thing that worked. That earns the point in
-full. -->
+**On the MCP move:** <!-- what changed in your code, and whether anything behaved differently afterwards. If the rewire didn't work, say exactly where it  broke — the error text and the last thing that worked. That earns the point in full. -->
 
 
 
