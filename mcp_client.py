@@ -45,8 +45,8 @@ def call_tool(name: str, arguments: dict):
     Args:
         name:      the tool name, exactly as registered in mcp_server.py.
         arguments: a dict of the tool's inputs. The names and types have to
-                   match the registration — that's your Tool Inventory, now
-                   being enforced by something other than you.
+                match the registration — that's your Tool Inventory, now
+                being enforced by something other than you.
 
     Returns:
         Whatever the tool returns, unwrapped back to its native Python shape.

@@ -21,18 +21,18 @@ Uncomment the block below and fill it in. Three things matter:
   1. **The name.** Exactly what your agent will ask for.
 
   2. **The description.** This is the part that isn't code and matters most.
-     Write it before you look at the example. You are not writing it for your
-     agent — you're writing it for an agent someone else builds, that will
-     never see your implementation. That isn't hypothetical; it's what every
-     MCP server on the registry is.
+    Write it before you look at the example. You are not writing it for your
+    agent — you're writing it for an agent someone else builds, that will
+    never see your implementation. That isn't hypothetical; it's what every
+    MCP server on the registry is.
 
-     Two things to get right: name units and types ("price" is ambiguous,
-     "max_price, in whole dollars" isn't), and state the empty case. Last unit
-     the empty case was on your spec sheet for your loop's benefit. Here it's
-     part of a published contract.
+    Two things to get right: name units and types ("price" is ambiguous,
+    "max_price, in whole dollars" isn't), and state the empty case. Last unit
+    the empty case was on your spec sheet for your loop's benefit. Here it's
+    part of a published contract.
 
   3. **The typed inputs.** These come straight from your Tool Inventory. If the
-     types here don't match your README, one of the two is wrong — fix it.
+    types here don't match your README, one of the two is wrong — fix it.
 
 Then point your agent at it. In `run_agent()`, swap the direct call:
 
@@ -69,20 +69,19 @@ mcp = FastMCP("fitfindr", log_level="WARNING")
 
 # ── TODO: uncomment and fill this in ──────────────────────────────────────────
 #
-# @mcp.tool()
-# def search_listings(
-#     description: str,
-#     size: str | None = None,
-#     max_price: float | None = None,
-# ) -> list[dict]:
-#     """
-#     <-- YOUR DESCRIPTION GOES HERE.
-#
-#         One or two sentences. What does this tool do, what does it need, and
-#         what does it give back when it finds nothing? Written for a reader
-#         who cannot see the code.
-#     """
-#     return _search_listings_impl(description, size, max_price)
+@mcp.tool() # using fastmcp
+def search_listings(
+    description: str,
+    size: str | None = None,
+    max_price: float | None = None,
+) -> list[dict]:
+    """
+    <-- Search the listings data for items matching a description, and optionally a
+        size and a price ceiling.
+        It returns a list of matching listing dicts, best match first.
+    
+    """
+    return _search_listings_impl(description, size, max_price)
 #
 # ──────────────────────────────────────────────────────────────────────────────
 #
