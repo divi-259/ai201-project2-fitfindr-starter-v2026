@@ -87,6 +87,7 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         # 3. Parse the query (regex — see README) into session["parsed"].
         session["parsed"] = _parse_query(query)
         parsed = session["parsed"]
+        trace.step("parse_query", inputs=query, returned=str(parsed))
 
         # 4. Search — over MCP, via the search_listings tool in mcp_server.py.
         session["search_results"] = call_tool("search_listings", {
@@ -94,25 +95,37 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             "size": parsed["size"],
             "max_price": parsed["max_price"],
         })
+        trace.step("search_listings (via MCP)", inputs=str(parsed),
+                   returned=session["search_results"])
 
         # ⚠️ THE BRANCH: nothing came back → say what to change, and stop
         # before suggest_outfit ever sees an empty result.
         if not session["search_results"]:
             session["error"] = _no_results_message(parsed)
+            trace.step("branch", note="search empty → stopping before suggest_outfit")
             return session
 
         # 5. Choose an item — the first result is the highest-scoring one.
         session["selected_item"] = session["search_results"][0]
+        trace.step("select_item", returned=session["selected_item"],
+                   note="results found → top match, continuing to suggest_outfit")
 
         # 6. Outfit, built around the item the session holds.
         session["outfit_suggestion"] = suggest_outfit(
             session["selected_item"], session["wardrobe"]
         )
+        trace.step("suggest_outfit",
+                   inputs=f"item={session['selected_item']['title']!r}, "
+                          f"wardrobe_items={len(session['wardrobe'].get('items', []))}",
+                   returned=session["outfit_suggestion"])
 
         # 7. Fit card, from the outfit and the same item.
         session["fit_card"] = create_fit_card(
             session["outfit_suggestion"], session["selected_item"]
         )
+        trace.step("create_fit_card",
+                   inputs=f"item={session['selected_item']['title']!r}, outfit=<from suggest_outfit>",
+                   returned=session["fit_card"])
 
         # 8. Done.
         return session
