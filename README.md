@@ -429,28 +429,60 @@ Not part of the improvement: alongside it I also added a `ModelUnavailable` hand
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. A matching query completes all three tools | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 2. An impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. The item search found is the item every later tool receives | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. The fit card names the item, its price and its platform | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. The size filter returns no false matches | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+
+Source: `results/run_2026-10-07_1905_after.md`, produced by `run_eval.py::main` (5 tries per scenario, caching off, temperature 0.9). It used the same scenarios as the before-run, with tries mapped the same way: criterion 4 is try 1 of each of the five items, and criterion 5 is try 1 of S, M, L, XL and US 8. No try crashed and none hit a 503. The empty-wardrobe diagnostic completed 5 of 5, each with general styling advice.
+
+Criterion 5, the row the improvement targeted. Every returned size now contains the requested size, and the result was identical in all 5 tries of each size:
+
+```
+vintage size S      before: ['S/M', 'S', 'One Size (adjustable)', 'One Size', 'S', 'One Size']
+                    after:  ['S/M', 'S', 'S']
+vintage size M      before: ['S/M', 'M', 'M', 'One Size (adjustable)', 'M/L', 'M', 'M', 'M', 'M', 'M']
+                    after:  ['S/M', 'M', 'M', 'M/L', 'M', 'M', 'M', 'M', 'M', 'M']
+vintage size L      before: ['L', 'L', 'One Size (adjustable)', 'L', 'M/L', 'L', 'One Size', 'One Size']
+                    after:  ['L', 'L', 'L', 'M/L', 'L']
+vintage size XL     before: ['XL (oversized)', 'XL (fits oversized)', 'One Size (adjustable)', 'XL', 'One Size', 'One Size']
+                    after:  ['XL (oversized)', 'XL (fits oversized)', 'XL']
+sneakers size US 8  before: ['US 8']
+                    after:  ['US 8']
+```
+
+Criterion 4, try 1 of each item. Every card names the item, its exact price and its platform in 2 to 3 sentences:
+
+```
+Levi's jeans  ($38, depop):     scored these vintage levi's 501s on depop for $38 and i’m obsessed with how they fit. …
+cardigan      ($35, depop):     Scored this chunky brown knit cardigan on Depop for $35 and honestly haven't taken it off since. …
+slip dress    ($30, depop):     scored this 90s floral silk slip dress on depop for just $30 and honestly I’m never taking it off. …
+cargo pants   ($27, poshmark):  Scored these low-rise khaki cargos on Poshmark for $27 and honestly they're doing all the heavy lifting. …
+track jacket  ($45, poshmark):  Scored this navy and white 90s track jacket on Poshmark for $45 and I'm obsessed. …
+```
 
 **Did it help, and how do I know:**
 
-<!-- If it made things worse, say that. Honestly reported, that earns full
-     credit and is more interesting than one that worked. -->
+**For criterion 5, yes: it went from MISSED (1/5) to MET (5/5).**
+- **What changed in the output:** before the fix, the S, M, L and XL queries each returned `One Size` accessories. After it, every returned size contains the requested size as a whole token. The table above shows it query by query.
+- **Why the change caused it:** the search is plain code with no model involved, and the queries, data and scoring rule were the same in both runs. The size rule was the only thing that changed between them.
+- **Nothing else broke:** sized results that were correct before are still returned, such as `S/M` for S and `M/L` for L. US 8 is unchanged. Criterion 3's scenario (`denim jacket size M`) returned the same four sizes as before.
 
+**Criterion 1 also went from MISSED (1/5) to MET (5/5), but the improvement didn't cause that.**
+- **Why it changed:** every before-run failure on criterion 1 was a Gemini `503 UNAVAILABLE` (high demand). The after-run had no 503s, so every try reached the model and finished.
+- **Why it isn't the improvement:** the size fix doesn't affect this query, which has no size. The `ModelUnavailable` handler can only turn a crash into an error message, which still scores FAIL.
 
 
 ---
 
 ## What's Still Broken
 
-<!-- For each criterion still missed: what you'd do, and why you stopped where
-     you did. "I ran out of time" is fine if it's true. Pretending nothing is
-     left is not. -->
+Every criterion was MET in the after-run, but two weaknesses are still there:
 
+- **Criterion 1 depends on Gemini being available.** The before-run showed that a burst of 503s can take it down to 1/5. The `ModelUnavailable` handler now turns those failures into a readable message instead of a crash, but it doesn't retry, so on a busy day criterion 1 would miss again.
 
+- **Criterion 4's "names the item" is a judgment call.** In the before-run, the cardigan card said "chunky brown knit" without the word "cardigan", and I counted it as a pass. A stricter check, such as requiring the item's category word in the card, would make the criterion scorable without judgment.
 
 <!-- ═════════════════════════════════════════════════════════════════════
 
