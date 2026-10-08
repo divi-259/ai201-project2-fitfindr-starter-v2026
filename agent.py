@@ -115,24 +115,39 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                    note=f"id={session['selected_item']['id']}; results found → "
                         f"top match, continuing to suggest_outfit")
 
-        # 6. Outfit, built around the item the session holds.
-        session["outfit_suggestion"] = suggest_outfit(
-            session["selected_item"], session["wardrobe"]
-        )
-        trace.step("suggest_outfit",
-                   inputs=f"item id={session['selected_item']['id']} "
-                          f"{session['selected_item']['title']!r}, "
-                          f"wardrobe_items={len(session['wardrobe'].get('items', []))}",
-                   returned=session["outfit_suggestion"])
+        # 6 and 7 call the model. If it can't be reached (bad key, no network,
+        # 503 "high demand"), stop with a message instead of a stack trace.
+        # The search result stays in the session, so the user still sees
+        # what was found.
+        step_name = "suggest_outfit"
+        try:
+            # 6. Outfit, built around the item the session holds.
+            session["outfit_suggestion"] = suggest_outfit(
+                session["selected_item"], session["wardrobe"]
+            )
+            trace.step("suggest_outfit",
+                       inputs=f"item id={session['selected_item']['id']} "
+                              f"{session['selected_item']['title']!r}, "
+                              f"wardrobe_items={len(session['wardrobe'].get('items', []))}",
+                       returned=session["outfit_suggestion"])
 
-        # 7. Fit card, from the outfit and the same item.
-        session["fit_card"] = create_fit_card(
-            session["outfit_suggestion"], session["selected_item"]
-        )
-        trace.step("create_fit_card",
-                   inputs=f"item id={session['selected_item']['id']} "
-                          f"{session['selected_item']['title']!r}, outfit=<from suggest_outfit>",
-                   returned=session["fit_card"])
+            # 7. Fit card, from the outfit and the same item.
+            step_name = "create_fit_card"
+            session["fit_card"] = create_fit_card(
+                session["outfit_suggestion"], session["selected_item"]
+            )
+            trace.step("create_fit_card",
+                       inputs=f"item id={session['selected_item']['id']} "
+                              f"{session['selected_item']['title']!r}, outfit=<from suggest_outfit>",
+                       returned=session["fit_card"])
+        except ModelUnavailable as exc:
+            item = session["selected_item"]
+            session["error"] = (
+                f"Found {item['title']} (${item['price']:g} on {item['platform']}), "
+                f"but couldn't reach the model to finish the {step_name} step: {exc}"
+            )
+            trace.step(step_name, note=f"ModelUnavailable → stopping: {exc}")
+            return session
 
         # 8. Done.
         return session
