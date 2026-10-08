@@ -59,7 +59,7 @@ FitFindr is a thrift-shopping assistant. A user describes the piece they want in
 
 ### `search_listings`
 
-- **What it does:** Filters the 40 mock listings by price and size, then ranks what's left by keyword overlap with the description. A keyword in the title, style tags or category scores 2; one found only in the description, colors or brand scores 1. Filler words ("looking", "for", "under") are ignored and a trailing plural "s" is dropped. Size matches on whole tokens: every token of the requested size must appear in the listing's size, so `M` matches `M`, `S/M` and `M/L`, but `S` does not match `US 9` and `L` does not match `XL`. `One Size` listings match any size.
+- **What it does:** Filters the 40 mock listings by price and size, then ranks what's left by keyword overlap with the description. A keyword in the title, style tags or category scores 2; one found only in the description, colors or brand scores 1. Filler words ("looking", "for", "under") are ignored and a trailing plural "s" is dropped. Size matches on whole tokens: every token of the requested size must appear in the listing's size, so `M` matches `M`, `S/M` and `M/L`, but `S` does not match `US 9` and `L` does not match `XL`. `One Size` listings never match an explicit size request (they still appear when no size is given). *Changed in unit 4, because criterion 5 missed: the size filter used to let `One Size` match any size. See The Improvement.*
 - **Inputs:** <!-- name and type each: `max_price` (float), not "a price" -->
   - `description` (str): keywords for what the user wants, e.g. `"vintage graphic tee"`
   - `size` (str | None): size to filter by, case-insensitive; `None` skips size filtering
@@ -334,7 +334,7 @@ Criterion 5, size S (identical in all 5 tries):
 
 **Criterion 5, MISSED 1/5.**
 - **Where:** the `search_listings` tool (`tools.py`).
-- **Mechanism:** the size filter treats a `One Size` listing as matching every requested size. This is on purpose, and the Tool Inventory says so ("`One Size` listings match any size"). Broad `vintage` queries pull in accessories sized `One Size` or `One Size (adjustable)` (a braided belt, a bucket hat and a shoulder bag), so they pass the filter for S, M, L and XL. US 8 passed only because the `sneakers` query didn't match any `One Size` listing.
+- **Mechanism:** the size filter treats a `One Size` listing as matching every requested size. This was on purpose, and the Tool Inventory said so at the time ("`One Size` listings match any size"). Broad `vintage` queries pull in accessories sized `One Size` or `One Size (adjustable)` (a braided belt, a bucket hat and a shoulder bag), so they pass the filter for S, M, L and XL. US 8 passed only because the `sneakers` query didn't match any `One Size` listing.
 - **Why it's consistent:** this is plain code with no model involved, so all 5 tries of each size returned identical results. The filter itself is correct on whole tokens. The conflict is between the rule that `One Size` fits all and the criterion's "every listing has the requested size".
 
 ---
@@ -419,9 +419,11 @@ python app.py ask 'yellow car under $30'
 
      `python run_eval.py --label after` -->
 
-**What I changed:**
+**What I changed:** the size rule in `search_listings`, specifically `_size_matches` in `tools.py`. Before, a listing sized `One Size` matched every requested size. Now a `One Size` listing never matches an explicit size request. It still appears when the query gives no size, because the size filter is skipped then. The search behaviour changed because criterion 5 failed. The criterion itself is unchanged in `criteria.md`, with the same wording and the same 5 of 5 target, and the after-run is measured against it.
 
-**Which failure it was meant to fix:**
+**Which failure it was meant to fix:** criterion 5, "the size filter returns no false matches", which MISSED at 1/5 in the before-run. The diagnosis pointed at the tool rather than the model: S, M, L and XL each returned `One Size` accessories (a braided belt, a bucket hat and a shoulder bag), and only US 8 came back clean. The filter is plain code, so the miss was the same in every try. That makes it a rule to change, not randomness to retry around. Checked directly after the change, the same queries return only matching sizes. For example, `vintage size S` now returns `S/M`, `S` and `S`, where before it also returned three `One Size` listings.
+
+Not part of the improvement: alongside it I also added a `ModelUnavailable` handler to `agent.py::run_agent`, which is one of the required failure modes. It turns a model error such as a bad key or a 503 into a message in `session["error"]` instead of a crash. It doesn't retry, so it can't turn a criterion 1 FAIL into a PASS. Any criterion 1 change in the after-run comes from Gemini's load at the time, not from this.
 
 ### Run Log — After
 
