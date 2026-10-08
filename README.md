@@ -224,17 +224,76 @@ I updated my criterias after the suggestions from the claude to make it more rob
 
 | Criterion | Target | Try 1 | Try 2 | Try 3 | Try 4 | Try 5 | Verdict |
 |---|---|---|---|---|---|---|---|
-| 1.  |  |  |  |  |  |  |  |
-| 2.  |  |  |  |  |  |  |  |
-| 3.  |  |  |  |  |  |  |  |
-| 4.  |  |  |  |  |  |  |  |
-| 5.  |  |  |  |  |  |  |  |
+| 1. A matching query completes all three tools | 4 of 5 | FAIL | FAIL | FAIL | PASS | FAIL | MISSED (1/5) |
+| 2. An impossible query stops before the second tool | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 3. The item search found is the item every later tool receives | 5 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 4. The fit card names the item, its price and its platform | 4 of 5 | PASS | PASS | PASS | PASS | PASS | MET (5/5) |
+| 5. The size filter returns no false matches | 5 of 5 | FAIL | FAIL | FAIL | FAIL | PASS | MISSED (1/5) |
 
-**Real output from one try**, pasted as text, naming the file and function
-that produced it:
+Source: `results/run_2026-10-07_1723_before.md`, produced by `run_eval.py::main` (5 tries per scenario, caching off, temperature 0.9). The scenarios are in `scenarios.py`.
+
+How each row's tries map to scenarios:
+- **Criteria 1–3:** one scenario each, run 5 times.
+- **Criterion 4:** the five tries are five different items: Levi's jeans (`lst_001`), cardigan (`lst_008`), slip dress (`lst_013`), cargo pants (`lst_011`) and track jacket (`lst_004`). Each column is try 1 of that item's scenario.
+- **Criterion 5:** the five tries are five sizes, in order S, M, L, XL and US 8. Each column is try 1 of that size's scenario. The search doesn't call the model, so all 5 tries of each size returned identical results.
+
+All 14 crashed tries in this run, across every scenario, raised the same error:
 
 ```
+ModelUnavailable: Couldn't reach the model: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+```
 
+Diagnostic run, not one of the five: **empty wardrobe** (`denim jacket under $50`, empty wardrobe) completed 2 of 5 tries, and the other 3 crashed with the 503 above. Both completed tries returned general styling advice instead of crashing or returning `""`.
+
+**Real output from one try**, pasted as text, naming the file and function
+that produced it. Criterion 1, try 4, from `run_eval.py::main` running `agent.py::run_agent`:
+
+```
+- stopped early: no
+- selected_item: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+- search_results: 10
+
+Outfit suggestion:
+**Outfit 1: Y2K Casual Streetwear**
+Pair the Y2K Baby Tee — Butterfly Print with your Baggy straight-leg jeans, dark wash for that classic early 2000s contrast between fitted and loose. Layer your Vintage black denim jacket over top and finish with the Chunky white sneakers.
+
+**Outfit 2: Sporty Layered Look**
+Style the Y2K Baby Tee — Butterfly Print underneath your Black cropped zip hoodie left open for a casual layered effect, paired with your Baggy straight-leg jeans, dark wash. Complete the outfit with your Black combat boots and the Black crossbody bag.
+
+Fit card:
+Found this cute lil butterfly baby tee on depop for $18 and haven't taken it off since. Swung it with baggy dark wash denim and sneakers for that lazy 2000s streetwear vibe, but I'm lowkey obsessed with how it looks under an unzipped hoodie with combat boots too. Such a good little find.
+
+Trace:
+[1] parse_query
+      in:  vintage graphic tee under $30
+      out: {'description': 'vintage graphic tee', 'size': None, 'max_price': 30.0}
+[2] search_listings (via MCP)
+      in:  {'description': 'vintage graphic tee', 'size': None, 'max_price': 30.0}
+      out: 10 items: Y2K Baby Tee — Butterfly Print, Graphic Tee — 2003 Tour Bootleg Style, Vintage Band Tee — Faded Grey … +7 more
+      →    top id=lst_002
+[3] select_item
+      out: Y2K Baby Tee — Butterfly Print ($18.0, depop)
+      →    id=lst_002; results found → top match, continuing to suggest_outfit
+[4] suggest_outfit
+      in:  item id=lst_002 'Y2K Baby Tee — Butterfly Print', wardrobe_items=10
+      out: **Outfit 1: Y2K Casual Streetwear** Pair the Y2K Baby Tee — Butterfly Print with your Baggy straight-leg jeans…
+[5] create_fit_card
+      in:  item id=lst_002 'Y2K Baby Tee — Butterfly Print', outfit=<from suggest_outfit>
+      out: Found this cute lil butterfly baby tee on depop for $18 and haven't taken it off since. Swung it with baggy da…
+```
+
+And try 1 of the same criterion, which crashed:
+
+```
+ModelUnavailable: Couldn't reach the model: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+```
+
+Criterion 5, size S (identical in all 5 tries):
+
+```
+[2] search_listings (via MCP)
+      in:  {'description': 'vintage', 'size': 'S', 'max_price': None}
+      →    top id=lst_002; sizes returned: ['S/M', 'S', 'One Size (adjustable)', 'One Size', 'S', 'One Size']
 ```
 
 ---
@@ -259,15 +318,24 @@ that produced it:
 
 | # | Criterion | Target | Verdict | How I decided |
 |---|---|---|---|---|
-| 1 |  |  |  |  |
-| 2 |  |  |  |  |
-| 3 |  |  |  |  |
-| 4 |  |  |  |  |
-| 5 |  |  |  |  |
+| 1 | A matching query completes all three tools | 4 of 5 | MISSED (1/5) | Only try 4 reached step 5 (`create_fit_card`) and returned a fit card. Tries 1, 2, 3 and 5 crashed with `ModelUnavailable` (503) and returned no fit card, so they count as FAIL. |
+| 2 | An impossible query stops before the second tool | 5 of 5 | MET (5/5) | In all 5 tries, the trace ended at step 3 (`branch`) with no `suggest_outfit` step, `selected_item` was `(none)`, and the message named all three things to change: price, size and keywords. |
+| 3 | The item search found is the item every later tool receives | 5 of 5 | MET (5/5) | In all 5 tries, the search's top result, `select_item`, `suggest_outfit` and `create_fit_card` all showed the same id, `lst_004`. |
+| 4 | The fit card names the item, its price and its platform | 4 of 5 | MET (5/5) | For each of the five items, the try-1 card named the item, gave the exact listing price ($38, $35, $30, $27, $45), named the platform (Depop or Poshmark), and was 3 sentences long. One judgment call: the cardigan card says "chunky brown knit" rather than "cardigan". I counted that as naming the item because the words come from its title (`Knit Cardigan — Chunky Brown`). Counted strictly, this row is still MET at 4/5. |
+| 5 | The size filter returns no false matches | 5 of 5 | MISSED (1/5) | S, M, L and XL each returned at least one `One Size` listing, which doesn't contain the requested size, so those tries FAIL under the rule I set in `scenarios.py` before the run. US 8 returned only `US 8`, so it PASSES. Apart from `One Size`, every result matched on a whole token: no XL for L, no US 9 for S. |
 
 **Diagnoses**
 
+**Criterion 1, MISSED 1/5.**
+- **Where:** the model, plus the loop's lack of handling for it.
+- **Mechanism:** Gemini (`gemini-3.5-flash-lite`) returned `503 UNAVAILABLE — This model is currently experiencing high demand`. `generate()` raised `ModelUnavailable`, and `agent.py::run_agent` neither retries nor catches it, so one failed model call crashed the whole run with no fit card.
+- **The pattern:** all 14 crashes in the run, across 5 scenarios, are this same 503. That's one problem, not 14.
+- **Why it isn't the loop's logic:** the earlier run of this same scenario (`results/run_2026-10-07_1646_before.md`) completed 5 of 5 with no crashes, and the one try here that reached the model completed normally. The loop works when the model answers. It has no defence when the model is briefly overloaded, which is a transient failure that a retry would usually get past.
 
+**Criterion 5, MISSED 1/5.**
+- **Where:** the `search_listings` tool (`tools.py`).
+- **Mechanism:** the size filter treats a `One Size` listing as matching every requested size. This is on purpose, and the Tool Inventory says so ("`One Size` listings match any size"). Broad `vintage` queries pull in accessories sized `One Size` or `One Size (adjustable)` (a braided belt, a bucket hat and a shoulder bag), so they pass the filter for S, M, L and XL. US 8 passed only because the `sneakers` query didn't match any `One Size` listing.
+- **Why it's consistent:** this is plain code with no model involved, so all 5 tries of each size returned identical results. The filter itself is correct on whole tokens. The conflict is between the rule that `One Size` fits all and the criterion's "every listing has the requested size".
 
 ---
 
