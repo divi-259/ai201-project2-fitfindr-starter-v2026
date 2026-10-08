@@ -17,8 +17,8 @@ import re
 
 import config
 import trace
-from tools import suggest_outfit, create_fit_card
-from mcp_client import call_tool
+from tools import create_fit_card
+from mcp_client import call_tool, MCPError
 from generate import ModelUnavailable
 
 
@@ -121,11 +121,13 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         # what was found.
         step_name = "suggest_outfit"
         try:
-            # 6. Outfit, built around the item the session holds.
-            session["outfit_suggestion"] = suggest_outfit(
-                session["selected_item"], session["wardrobe"]
-            )
-            trace.step("suggest_outfit",
+            # 6. Outfit, built around the item the session holds — over MCP,
+            #    via the suggest_outfit tool in mcp_server.py.
+            session["outfit_suggestion"] = call_tool("suggest_outfit", {
+                "new_item": session["selected_item"],
+                "wardrobe": session["wardrobe"],
+            })
+            trace.step("suggest_outfit (via MCP)",
                        inputs=f"item id={session['selected_item']['id']} "
                               f"{session['selected_item']['title']!r}, "
                               f"wardrobe_items={len(session['wardrobe'].get('items', []))}",
@@ -140,7 +142,9 @@ def run_agent(query: str, wardrobe: dict) -> dict:
                        inputs=f"item id={session['selected_item']['id']} "
                               f"{session['selected_item']['title']!r}, outfit=<from suggest_outfit>",
                        returned=session["fit_card"])
-        except ModelUnavailable as exc:
+        # A ModelUnavailable raised inside the MCP server comes back as an
+        # MCPError, so catch both.
+        except (ModelUnavailable, MCPError) as exc:
             item = session["selected_item"]
             session["error"] = (
                 f"Found {item['title']} (${item['price']:g} on {item['platform']}), "

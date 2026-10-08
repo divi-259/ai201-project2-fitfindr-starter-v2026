@@ -60,6 +60,7 @@ works with a direct call, and **a documented failure earns the point in full.**
 from mcp.server.fastmcp import FastMCP
 
 from tools import search_listings as _search_listings_impl  # noqa: F401 — you'll use this below
+from tools import suggest_outfit as _suggest_outfit_impl
 
 # log_level="WARNING" keeps the server from printing an INFO line for every
 # request. Without it your terminal fills with "Processing request of type
@@ -82,6 +83,29 @@ def search_listings(
     
     """
     return _search_listings_impl(description, size, max_price)
+
+
+@mcp.tool()
+def suggest_outfit(new_item: dict, wardrobe: dict) -> str:
+    """
+    Suggest one or two outfits built around a thrifted item, using the
+    user's wardrobe. Calls a language model, so it can take a few seconds.
+
+    Inputs:
+        new_item: one listing dict, exactly as returned by search_listings.
+                  Must have 'title', 'category', 'colors' (list of str),
+                  'style_tags' (list of str), 'condition', 'description';
+                  'brand' is optional.
+        wardrobe: a dict with an 'items' key holding a list of wardrobe item
+                  dicts, each with 'name', 'category', and optionally
+                  'colors' (list of str) and 'notes'. 'items' may be an
+                  empty list.
+
+    Returns a non-empty string of outfit suggestions. With an empty wardrobe
+    it returns general styling advice using common staples instead of
+    naming owned pieces. Returns an error if the model can't be reached.
+    """
+    return _suggest_outfit_impl(new_item, wardrobe)
 #
 # ──────────────────────────────────────────────────────────────────────────────
 #
