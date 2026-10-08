@@ -130,11 +130,12 @@ def _size_matches(wanted: str, listing_size: str) -> bool:
     token in the listing's size. So "M" matches "M", "S/M" and "M/L", but not
     "W30 L30"; "S" doesn't match "US 9"; "L" doesn't match "XL".
 
-    "One Size" listings match any request — they aren't sized.
+    "One Size" listings don't match an explicit size. A user who asks for
+    size S wants something labelled S, not a belt or a hat that fits anyone.
+    They still show up when no size is given, because then this filter is
+    skipped altogether.
     """
     have = set(_tokens(listing_size))
-    if {"one", "size"} <= have:
-        return True
     want = set(_tokens(wanted))
     return bool(want) and want <= have
 
