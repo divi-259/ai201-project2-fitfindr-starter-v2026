@@ -35,18 +35,93 @@ SCENARIOS = [
         "wardrobe": "empty",
         "criterion": None,
     },
-    # TODO: add what your criteria 3, 4 and 5 need.
+    {
+        # Criterion 3 — state. A normal matching query; what's checked is the
+        # item id in the trace: select_item, suggest_outfit and create_fit_card
+        # must all show the same id as the search's top result.
+        "name": "state: same item through every tool",
+        "query": "denim jacket size M",
+        "wardrobe": "example",
+        "criterion": 3,
+    },
+    # Criterion 4 — the fit card, across FIVE DIFFERENT items. run_eval runs
+    # each scenario five times; score try 1 of each item as that item's try.
+    # Each query below selects a different top listing (checked with
+    # search_listings directly).
+    {
+        # → lst_001 Vintage Levi's 501 Jeans — Medium Wash
+        "name": "fit card: item 1 (Levi's jeans)",
+        "query": "vintage levis jeans under $50",
+        "wardrobe": "example",
+        "criterion": 4,
+    },
+    {
+        # → lst_008 Knit Cardigan — Chunky Brown
+        "name": "fit card: item 2 (cardigan)",
+        "query": "cardigan under $40",
+        "wardrobe": "example",
+        "criterion": 4,
+    },
+    {
+        # → lst_013 90s Silk Slip Dress — Floral, Midi Length
+        "name": "fit card: item 3 (slip dress)",
+        "query": "slip dress",
+        "wardrobe": "example",
+        "criterion": 4,
+    },
+    {
+        # → lst_011 Low-Rise Cargo Pants — Khaki
+        "name": "fit card: item 4 (cargo pants)",
+        "query": "cargo pants under $30",
+        "wardrobe": "example",
+        "criterion": 4,
+    },
+    {
+        # → lst_004 90s Track Jacket — Navy/White Stripe
+        "name": "fit card: item 5 (track jacket)",
+        "query": "track jacket",
+        "wardrobe": "example",
+        "criterion": 4,
+    },
+    # Criterion 5 — the size filter, one scenario per size. Broad "vintage"
+    # queries pull in many sizes, so a loose filter would show up here. The
+    # search trace step prints every returned size; each must contain the
+    # requested size as a whole token (no XL for L, no US 9 for S).
     #
-    # Set "criterion" to the number in criteria.md that the scenario tests.
-    # "criterion": None means a diagnostic run — useful to have, but it isn't
-    # one of your five, and run_eval.py marks it as such in the table.
-    #
-    # For a state criterion, any normal query works — what you're checking is
-    # what ends up in the session, not what the user typed.
-    #
-    # For a fit-card criterion, you probably want the SAME query listed more
-    # than once, or several different items, depending on what your criterion
-    # actually says.
+    # Scoring rule, decided before the run: a "One Size" listing does NOT
+    # contain the requested size, so a try that returns one is a FAIL. The
+    # search lets One Size through on purpose — if that costs the criterion,
+    # it's a finding to diagnose, not a reason to reword the criterion.
+    {
+        "name": "size filter: S",
+        "query": "vintage size S",
+        "wardrobe": "example",
+        "criterion": 5,
+    },
+    {
+        "name": "size filter: M",
+        "query": "vintage size M",
+        "wardrobe": "example",
+        "criterion": 5,
+    },
+    {
+        "name": "size filter: L",
+        "query": "vintage size L",
+        "wardrobe": "example",
+        "criterion": 5,
+    },
+    {
+        "name": "size filter: XL",
+        "query": "vintage size XL",
+        "wardrobe": "example",
+        "criterion": 5,
+    },
+    {
+        "name": "size filter: US 8",
+        "query": "sneakers size US 8",
+        "wardrobe": "example",
+        "criterion": 5,
+    },
 ]
 
 WARDROBES = ("example", "empty")

@@ -95,8 +95,12 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             "size": parsed["size"],
             "max_price": parsed["max_price"],
         })
+        results = session["search_results"]
         trace.step("search_listings (via MCP)", inputs=str(parsed),
-                   returned=session["search_results"])
+                   returned=results,
+                   note=(f"top id={results[0]['id']}" if results else "")
+                        + (f"; sizes returned: {[r['size'] for r in results]}"
+                           if parsed["size"] else ""))
 
         # ⚠️ THE BRANCH: nothing came back → say what to change, and stop
         # before suggest_outfit ever sees an empty result.
@@ -108,14 +112,16 @@ def run_agent(query: str, wardrobe: dict) -> dict:
         # 5. Choose an item — the first result is the highest-scoring one.
         session["selected_item"] = session["search_results"][0]
         trace.step("select_item", returned=session["selected_item"],
-                   note="results found → top match, continuing to suggest_outfit")
+                   note=f"id={session['selected_item']['id']}; results found → "
+                        f"top match, continuing to suggest_outfit")
 
         # 6. Outfit, built around the item the session holds.
         session["outfit_suggestion"] = suggest_outfit(
             session["selected_item"], session["wardrobe"]
         )
         trace.step("suggest_outfit",
-                   inputs=f"item={session['selected_item']['title']!r}, "
+                   inputs=f"item id={session['selected_item']['id']} "
+                          f"{session['selected_item']['title']!r}, "
                           f"wardrobe_items={len(session['wardrobe'].get('items', []))}",
                    returned=session["outfit_suggestion"])
 
@@ -124,7 +130,8 @@ def run_agent(query: str, wardrobe: dict) -> dict:
             session["outfit_suggestion"], session["selected_item"]
         )
         trace.step("create_fit_card",
-                   inputs=f"item={session['selected_item']['title']!r}, outfit=<from suggest_outfit>",
+                   inputs=f"item id={session['selected_item']['id']} "
+                          f"{session['selected_item']['title']!r}, outfit=<from suggest_outfit>",
                    returned=session["fit_card"])
 
         # 8. Done.
