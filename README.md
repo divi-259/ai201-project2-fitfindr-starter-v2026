@@ -102,13 +102,21 @@ FitFindr is a thrift-shopping assistant. A user describes the piece they want in
 
 **Branch rule:** If `search_listings` returns an empty list, put a message in `session["error"]` that tells the user what to change (raise the price limit, drop or change the size, or use broader keywords), and return the session without calling `suggest_outfit` or `create_fit_card`. Otherwise, take the first (highest-scoring) result as `session["selected_item"]` and go on to `suggest_outfit`, then `create_fit_card`. Every pass round the loop first calls `trace.check_iterations(count)`, which raises once the count passes `MAX_ITERATIONS` (10).
 
+> **Updated in unit 4 (stretch: retry with looser constraints):** an empty search no longer stops straight away. The agent retries first without the price limit, then without the size, and stops only when an empty search has nothing left to loosen. It never changes the keywords. If a loosened search finds something, it carries on to `suggest_outfit` and sets `session["notice"]` to say what was dropped. The rule that `suggest_outfit` never sees an empty result still holds. See "Stretch: retry with looser constraints" under On the MCP move.
+
 **Where it lives:** `agent.py::run_agent`
+
+**Over MCP (unit 4):** `search_listings` and `suggest_outfit` are called through `call_tool` in `mcp_client.py`, which talks to `mcp_server.py`. `suggest_outfit` is the stretch move, explained under On the MCP move. `create_fit_card` is still a direct call.
 
 **How the query is parsed:** Regex, no model call. `max_price` comes from a dollar amount after "under", "below", "less than" or "max" (e.g. `under $30` → `30.0`). `size` comes from the token after the word "size" (e.g. `size M` → `"M"`, `size US 8.5` → `"US 8.5"`). Size formats handled: `M`, `S/M`, `XXS`, `W30`, `US 8.5`. Whatever remains, with those phrases, commas and `$` signs removed, is the `description`. If no price or size is found, that field is `None` and `search_listings` skips that filter. The parsing is `_parse_query` in `agent.py`.
 
 **The error message on an empty search:** built by `_no_results_message` in `agent.py`. It repeats what was searched for and suggests changing only the filters the user actually set, plus broader keywords. For `designer ballgown size XXS under $5`:
 
 > No listings matched 'designer ballgown' in size XXS under $5. To find something, raise the price limit above $5, or try a different size than XXS, or use broader keywords (e.g. 'jacket' instead of a specific style).
+
+> **Updated in unit 4 (stretch):** with retries, the agent only stops once the price and size have already been dropped, so suggesting them again would send the user down a dead end. The final message now names only the keywords:
+>
+> No listings matched 'designer ballgown', even after searching without the price limit and without the size. The keywords are what's missing: use broader ones (e.g. 'jacket' instead of a specific style).
 
 **What moves through the session:** in order:
 1. `query`: the user's text, set by `new_session`
@@ -120,6 +128,13 @@ FitFindr is a thrift-shopping assistant. A user describes the piece they want in
 7. `fit_card`: the string `create_fit_card(outfit_suggestion, selected_item)` returned
 
 `wardrobe` is set at the start and read by `suggest_outfit`. When the run stops early, `selected_item`, `outfit_suggestion` and `fit_card` stay `None`.
+
+**Added in unit 4 (stretch):**
+- `search_params`: what the last search actually used. It matches `parsed` unless a retry loosened it.
+- `relaxed`: the constraints dropped on retry, in order: `"price"`, then `"size"`.
+- `notice`: set when a loosened search found something, telling the user what was dropped. `app.py` prints it above "Found".
+
+`parsed` is set once, before the loop, and never changes, so the session always holds what the user actually asked for.
 
 ---
 
@@ -407,6 +422,19 @@ python app.py ask 'yellow car under $30'
 ```
 
 **On the MCP move:** <!-- what changed in your code, and whether anything behaved differently afterwards. If the rewire didn't work, say exactly where it  broke — the error text and the last thing that worked. That earns the point in full. -->
+
+### Stretch: a second tool moved onto MCP, `suggest_outfit`
+
+`suggest_outfit` is now also registered in `mcp_server.py` and called over MCP. It's the first tool on the server that calls the model.
+
+### Stretch: retry with looser constraints
+
+Before this change, an empty search stopped the run straight away. Now `agent.py::run_agent` retries with looser constraints, using the `while` loop that until now only ever ran once:
+
+1. Search with everything the user gave: keywords, size and price.
+2. If that comes back empty and there was a price limit, drop the price limit and search again.
+3. If it's still empty and there was a size, drop the size and search again.
+4. If it's still empty with nothing left to loosen, stop before `suggest_outfit` with a message, as before.
 
 
 

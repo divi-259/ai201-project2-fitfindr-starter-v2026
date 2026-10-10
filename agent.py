@@ -47,6 +47,9 @@ def new_session(query: str, wardrobe: dict) -> dict:
         "outfit_suggestion": None,   # what suggest_outfit returned
         "fit_card": None,            # what create_fit_card returned
         "error": None,               # set when the run ended early
+        "search_params": {},         # what the LAST search actually used (may be loosened)
+        "relaxed": [],               # constraints dropped on retry, in order: "price", "size"
+        "notice": None,              # tells the user what was loosened, if anything
     }
 
 
@@ -75,45 +78,74 @@ def run_agent(query: str, wardrobe: dict) -> dict:
     # 2. Count the times round the loop, and call trace.check_iterations(count)
     #    on each one before you go again. It raises when the count passes
     #    MAX_ITERATIONS in config.py — see trace.py.
+    # 3. Parse the query (regex — see README) into session["parsed"]. Once,
+    #    before the loop: retries loosen a copy, so "parsed" always holds what
+    #    the user actually asked for.
+    session["parsed"] = _parse_query(query)
+    parsed = session["parsed"]
+    trace.step("parse_query", inputs=query, returned=str(parsed))
+    params = dict(parsed)
+
+    # 2. Count the times round the loop, and call trace.check_iterations(count)
+    #    on each one before you go again. It raises when the count passes
+    #    MAX_ITERATIONS in config.py — see trace.py.
     count = 0
     while True:
         count += 1
         trace.check_iterations(count)
 
-        # Every path through the body ends in `return session` — done, or
-        # stopped early on the branch. If one doesn't, check_iterations above
-        # is what catches it.
-
-        # 3. Parse the query (regex — see README) into session["parsed"].
-        session["parsed"] = _parse_query(query)
-        parsed = session["parsed"]
-        trace.step("parse_query", inputs=query, returned=str(parsed))
+        # Every path through the body ends in `return session` or `continue`
+        # with one constraint fewer. There are only two to drop, so the loop
+        # runs at most three times; check_iterations is the backstop.
 
         # 4. Search — over MCP, via the search_listings tool in mcp_server.py.
+        session["search_params"] = dict(params)
         session["search_results"] = call_tool("search_listings", {
-            "description": parsed["description"],
-            "size": parsed["size"],
-            "max_price": parsed["max_price"],
+            "description": params["description"],
+            "size": params["size"],
+            "max_price": params["max_price"],
         })
         results = session["search_results"]
-        trace.step("search_listings (via MCP)", inputs=str(parsed),
+        trace.step("search_listings (via MCP)", inputs=str(params),
                    returned=results,
-                   note=(f"top id={results[0]['id']}" if results else "")
-                        + (f"; sizes returned: {[r['size'] for r in results]}"
-                           if parsed["size"] else ""))
+                   note="; ".join(
+                       ([f"top id={results[0]['id']}"] if results else [])
+                       + ([f"sizes returned: {[r['size'] for r in results]}"]
+                          if params["size"] and results else [])))
 
-        # ⚠️ THE BRANCH: nothing came back → say what to change, and stop
-        # before suggest_outfit ever sees an empty result.
-        if not session["search_results"]:
-            session["error"] = _no_results_message(parsed)
-            trace.step("branch", note="search empty → stopping before suggest_outfit")
+        # ⚠️ THE BRANCH: nothing came back. Retry with looser constraints —
+        # price first, then size — and only stop once there is nothing left
+        # to loosen. suggest_outfit never sees an empty result either way.
+        # Keywords are never changed: that would be searching for something
+        # the user didn't ask for.
+        if not results:
+            if params["max_price"] is not None:
+                params["max_price"] = None
+                session["relaxed"].append("price")
+                trace.step("branch", note=f"search empty → retrying without the "
+                                          f"${parsed['max_price']:g} price limit")
+                continue
+            if params["size"]:
+                params["size"] = None
+                session["relaxed"].append("size")
+                trace.step("branch", note=f"search empty → retrying without "
+                                          f"size {parsed['size']}")
+                continue
+            session["error"] = _no_results_message(parsed, session["relaxed"])
+            trace.step("branch", note="search empty, nothing left to loosen → "
+                                      "stopping before suggest_outfit")
             return session
+
+        if session["relaxed"]:
+            session["notice"] = _relaxed_notice(parsed, session["relaxed"])
 
         # 5. Choose an item — the first result is the highest-scoring one.
         session["selected_item"] = session["search_results"][0]
         trace.step("select_item", returned=session["selected_item"],
-                   note=f"id={session['selected_item']['id']}; results found → "
-                        f"top match, continuing to suggest_outfit")
+                   note=f"id={session['selected_item']['id']}; results found"
+                        + (f" after dropping {' and '.join(session['relaxed'])}"
+                           if session["relaxed"] else "")
+                        + " → top match, continuing to suggest_outfit")
 
         # 6 and 7 call the model. If it can't be reached (bad key, no network,
         # 503 "high demand"), stop with a message instead of a stack trace.
@@ -209,8 +241,36 @@ def _parse_query(query: str) -> dict:
     return {"description": description, "size": size, "max_price": max_price}
 
 
-def _no_results_message(parsed: dict) -> str:
+def _relaxed_notice(parsed: dict, relaxed: list[str]) -> str:
+    """Tell the user which of their constraints a retry dropped."""
+    dropped = []
+    if "price" in relaxed:
+        dropped.append(f"the ${parsed['max_price']:g} price limit")
+    if "size" in relaxed:
+        dropped.append(f"size {parsed['size']}")
+    return (
+        f"Nothing matched '{parsed['description']}' as you asked, so I searched "
+        f"again without {' and '.join(dropped)}. Check the price and size below."
+    )
+
+
+def _no_results_message(parsed: dict, relaxed: list[str] | None = None) -> str:
     """Say what the user could change, based on which filters they used."""
+    if relaxed:
+        # The retries already proved the price and size weren't the problem,
+        # so suggesting them again would send the user down a dead end.
+        tried = []
+        if "price" in relaxed:
+            tried.append("without the price limit")
+        if "size" in relaxed:
+            tried.append("without the size")
+        return (
+            f"No listings matched '{parsed['description']}', even after searching "
+            + " and ".join(tried)
+            + ". The keywords are what's missing: use broader ones "
+            "(e.g. 'jacket' instead of a specific style)."
+        )
+
     changes = []
     if parsed["max_price"] is not None:
         changes.append(f"raise the price limit above ${parsed['max_price']:g}")
@@ -235,6 +295,8 @@ def _show(session: dict) -> None:
         return
 
     item = session["selected_item"] or {}
+    if session.get("notice"):
+        print(f"  note:     {session['notice']}")
     print(f"  found:    {item.get('title')} — ${item.get('price')} on {item.get('platform')}")
     print(f"  outfit:   {session['outfit_suggestion']}")
     print(f"  fit card: {session['fit_card']}")
